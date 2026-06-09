@@ -10,25 +10,10 @@ from vectordb.chroma_store import (
     ChromaStore
 )
 
-from retrieval.retriever import (
-    Retriever
+from graph.rag_graph import (
+    build_graph
 )
 
-from generation.generator import (
-    Generator
-)
-
-from rerank.reranker import (
-    Reranker
-)
-
-from refine.refiner import (
-    Refiner
-)
-
-from rewrite.query_rewriter import (
-    QueryRewriter
-)
 
 # --------------------------
 # STEP 1: LOAD PDF
@@ -82,110 +67,32 @@ print(
     "Embeddings stored!"
 )
 
+
 # --------------------------
-# STEP 4: QUERY REWRITE
+# STEP 4: RUN GRAPH
 # --------------------------
+
+graph = (
+    build_graph()
+)
 
 query = (
     "What projects has she done?"
 )
 
-rewriter = (
-    QueryRewriter()
-)
-
-rewritten_query = (
-    rewriter.rewrite(
-        query
+result = (
+    graph.invoke(
+        {
+            "query":
+            query
+        }
     )
 )
 
 print(
-    "\nOriginal Query:",
-    query
+    "\nFinal Answer:\n"
 )
 
 print(
-    "Rewritten Query:",
-    rewritten_query
+    result["answer"]
 )
-
-
-# --------------------------
-# STEP 5: RETRIEVE
-# --------------------------
-
-retriever = Retriever(
-    persist_directory=
-    "./test_db"
-)
-
-retrieved_docs = (
-    retriever.retrieve(
-        query=
-        rewritten_query,
-        k=10
-    )
-)
-
-print(
-    "\nRetrieved docs:",
-    len(retrieved_docs)
-)
-# --------------------------
-# STEP 5: RERANK
-# --------------------------
-
-reranker = Reranker()
-
-reranked_docs = (
-    reranker.rerank(
-        query=rewritten_query,
-        retrieved_docs=
-        retrieved_docs,
-        top_k=3
-    )
-)
-
-print(
-    "\nReranked docs:",
-    len(reranked_docs)
-)
-
-
-# --------------------------
-# STEP 6: REFINE
-# --------------------------
-
-refiner = Refiner()
-
-refined_docs = (
-    refiner.refine(
-        reranked_docs
-    )
-)
-
-print(
-    "\nRefined docs:",
-    len(refined_docs)
-)
-
-
-# --------------------------
-# STEP 7: GENERATE
-# --------------------------
-
-generator = Generator()
-
-answer = (
-    generator
-    .generate_answer(
-        query=rewritten_query,
-        retrieved_docs=
-        refined_docs
-    )
-)
-
-print("\nFinal Answer:\n")
-
-print(answer)

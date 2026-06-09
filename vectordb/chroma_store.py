@@ -10,6 +10,9 @@ from config.settings import (
     Settings
 )
 
+import shutil
+import os
+
 
 class ChromaStore:
 
@@ -34,14 +37,25 @@ class ChromaStore:
         chunks
     ):
 
-        vector_store = Chroma.from_documents(
-            documents=chunks,
-
-            embedding=
-            self.embedding_model,
-
-            persist_directory=
+        # Remove old DB
+        if os.path.exists(
             self.persist_directory
+        ):
+
+            shutil.rmtree(
+                self.persist_directory
+            )
+
+        vector_store = (
+            Chroma.from_documents(
+                documents=chunks,
+
+                embedding=
+                self.embedding_model,
+
+                persist_directory=
+                self.persist_directory
+            )
         )
 
         return vector_store

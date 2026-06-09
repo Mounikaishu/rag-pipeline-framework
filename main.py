@@ -77,18 +77,23 @@ graph = (
 )
 
 query = (
-    "What projects has she done?"
+    "What internships has she completed?"
 )
 
 result = (
     graph.invoke(
         {
             "query":
-            query
+            query,
+
+            "chunks":
+            chunks,
+
+            "retry_count":
+            0
         }
     )
 )
-
 print(
     "\nFinal Answer:\n"
 )

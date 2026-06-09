@@ -9,12 +9,16 @@ from rewrite.query_rewriter import (
     QueryRewriter
 )
 
-from retrieval.retriever import (
-    Retriever
+from retrieval.hybrid_retriever import (
+    HybridRetriever
 )
 
 from rerank.reranker import (
     Reranker
+)
+
+from graph.router import (
+    route_after_rerank
 )
 
 from refine.refiner import (
@@ -34,12 +38,15 @@ class GraphState(
     TypedDict
 ):
     query: str
+    chunks: list
     rewritten_query: str
     retrieved_docs: list
     reranked_docs: list
     refined_docs: list
+    best_score: float
+    score_gap: float
+    retry_count: int
     answer: str
-
 
 # -------------------------
 # NODES
@@ -63,11 +70,19 @@ def rewrite_node(
         "\nRewritten Query:",
         rewritten_query
     )
-
+    retry_count = (
+    state.get(
+        "retry_count",
+        0
+    ) + 1
+)
     return {
-        "rewritten_query":
-        rewritten_query
-    }
+    "rewritten_query":
+    rewritten_query,
+
+    "retry_count":
+    retry_count
+}
 
 
 def retrieve_node(
@@ -75,7 +90,7 @@ def retrieve_node(
 ):
 
     retriever = (
-        Retriever(
+        HybridRetriever(
             persist_directory=
             "./test_db"
         )
@@ -87,6 +102,12 @@ def retrieve_node(
             state[
                 "rewritten_query"
             ],
+
+            chunks=
+            state[
+                "chunks"
+            ],
+
             k=10
         )
     )
@@ -110,7 +131,7 @@ def rerank_node(
         Reranker()
     )
 
-    reranked_docs = (
+    rerank_result = (
         reranker.rerank(
             query=
             state[
@@ -124,6 +145,34 @@ def rerank_node(
         )
     )
 
+    reranked_docs = (
+        rerank_result[
+            "docs"
+        ]
+    )
+
+    best_score = (
+        rerank_result[
+            "best_score"
+        ]
+    )
+
+    score_gap = (
+        rerank_result[
+            "score_gap"
+        ]
+    )
+
+    print(
+        "\nBest rerank score:",
+        best_score
+    )
+
+    print(
+        "Score gap:",
+        score_gap
+    )
+
     print(
         "\nReranked docs:",
         len(reranked_docs)
@@ -131,7 +180,13 @@ def rerank_node(
 
     return {
         "reranked_docs":
-        reranked_docs
+        reranked_docs,
+
+        "best_score":
+        best_score,
+
+        "score_gap":
+        score_gap
     }
 
 
@@ -203,6 +258,7 @@ def build_graph():
         )
     )
 
+    # Nodes
     workflow.add_node(
         "rewrite",
         rewrite_node
@@ -228,10 +284,12 @@ def build_graph():
         generate_node
     )
 
+    # Entry point
     workflow.set_entry_point(
         "rewrite"
     )
 
+    # Edges
     workflow.add_edge(
         "rewrite",
         "retrieve"
@@ -242,9 +300,17 @@ def build_graph():
         "rerank"
     )
 
-    workflow.add_edge(
+    # Conditional routing
+    workflow.add_conditional_edges(
         "rerank",
-        "refine"
+        route_after_rerank,
+        {
+            "rewrite":
+            "rewrite",
+
+            "refine":
+            "refine"
+        }
     )
 
     workflow.add_edge(

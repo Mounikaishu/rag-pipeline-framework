@@ -10,39 +10,23 @@ from langchain_core.documents import (
     Document
 )
 
-from config.settings import (
-    Settings
-)
+import re
 
 
 class Chunker:
 
     def __init__(self):
 
-        self.headers = [
-            "Career Objective",
-            "Education",
-            "Projects",
-            "Skills",
-            "Achievements",
-            "Certifications",
-            "Experience"
-        ]
-
-        self.embedding_model = (
+        self.embeddings = (
             HuggingFaceEmbeddings(
                 model_name=
-                Settings.EMBEDDING_MODEL
+                "sentence-transformers/all-MiniLM-L6-v2"
             )
         )
 
-        self.semantic_splitter = (
+        self.semantic_chunker = (
             SemanticChunker(
-                embeddings=
-                self.embedding_model,
-
-                breakpoint_threshold_type=
-                "percentile"
+                self.embeddings
             )
         )
 
@@ -51,70 +35,96 @@ class Chunker:
         documents
     ):
 
-        all_chunks = []
+        full_text = "\n".join(
+            [
+                doc.page_content
+                for doc in documents
+            ]
+        )
 
-        for doc in documents:
+        # ----------------------
+        # SECTION HEADERS
+        # ----------------------
 
-            text = doc.page_content
+        headers = [
+            "Career Objective",
+            "Education",
+            "Projects",
+            "Skills",
+            "Achievements",
+            "Certifications",
+            "Experience",
+            "Internships"
+        ]
 
-            sections = (
-                self._header_chunk(
-                    text
-                )
-            )
+        pattern = (
+            "("
+            + "|".join(headers)
+            + ")"
+        )
 
-            for section in sections:
+        splits = re.split(
+            pattern,
+            full_text
+        )
 
-                semantic_chunks = (
-                    self.semantic_splitter
-                    .create_documents(
-                        [section]
-                    )
-                )
+        section_docs = []
 
-                all_chunks.extend(
-                    semantic_chunks
-                )
+        current_header = None
 
-        return all_chunks
+        for split in splits:
 
-    def _header_chunk(
-        self,
-        text
-    ):
+            split = split.strip()
 
-        sections = []
+            if not split:
+                continue
 
-        current_section = ""
+            # If header found
+            if split in headers:
 
-        lines = text.split("\n")
-
-        for line in lines:
-
-            line = line.strip()
-
-            if line in self.headers:
-
-                if current_section:
-
-                    sections.append(
-                        current_section
-                    )
-
-                current_section = (
-                    line + "\n"
-                )
+                current_header = split
 
             else:
 
-                current_section += (
-                    line + "\n"
+                content = (
+                    f"{current_header}\n"
+                    f"{split}"
                 )
 
-        if current_section:
+                section_docs.append(
+                    Document(
+                        page_content=
+                        content,
 
-            sections.append(
-                current_section
+                        metadata={
+                            "section":
+                            current_header
+                        }
+                    )
+                )
+
+        # ----------------------
+        # SEMANTIC CHUNKING
+        # ----------------------
+
+        final_chunks = []
+
+        for section_doc in section_docs:
+
+            semantic_chunks = (
+                self.semantic_chunker
+                .split_documents(
+                    [section_doc]
+                )
             )
 
-        return sections
+            final_chunks.extend(
+                semantic_chunks
+            )
+
+        print(
+            "Chunks created:",
+            len(final_chunks)
+        )
+
+        return final_chunks

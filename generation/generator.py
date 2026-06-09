@@ -35,17 +35,31 @@ You are a helpful AI assistant.
 Answer the user's question
 ONLY using the provided context.
 
+If information exists
+in the context,
+extract it completely.
+
+Do NOT ignore relevant details.
+
+If multiple relevant
+items exist,
+include all of them.
+
+Do not guess or
+invent information.
+
 If answer is not present,
-say:
+say exactly:
+
 "I could not find this information in the documents."
 
-Context:
-{context}
-
-Question:
+QUESTION:
 {query}
 
-Answer:
+CONTEXT:
+{context}
+
+ANSWER:
 """
 
         response = self.llm.invoke(

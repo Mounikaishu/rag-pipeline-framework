@@ -46,18 +46,41 @@ class Retriever:
             "\nRunning Vector Search..."
         )
 
-        results = (
-            self.vector_store
-            .max_marginal_relevance_search(
-                query=query,
-                k=k,
-                fetch_k=20
+        try:
+
+            results = (
+                self.vector_store
+                .similarity_search_with_score(
+                    query,
+                    k=k
+                )
             )
-        )
 
-        print(
-            "\nVector Retrieved:",
-            len(results)
-        )
+            docs = []
 
-        return results
+            for doc, score in results:
+
+                print(
+                    f"Vector Score:"
+                    f" {score:.4f}"
+                )
+
+                docs.append(
+                    doc
+                )
+
+            print(
+                "\nVector Retrieved:",
+                len(docs)
+            )
+
+            return docs
+
+        except Exception as e:
+
+            print(
+                "\nVector Search Error:",
+                e
+            )
+
+            return []

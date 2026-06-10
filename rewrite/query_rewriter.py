@@ -14,41 +14,86 @@ class QueryRewriter:
 
     def rewrite(
         self,
-        query
+        query,
+        chat_history=""
     ):
 
-        prompt = f"""
-You are a query rewriting assistant for a RAG system.
+        query = (
+            query
+            .strip()
+        )
 
-Rewrite the query ONLY to improve retrieval.
+        has_history = (
+            len(
+                str(chat_history)
+            ) > 5
+        )
+
+        prompt = f"""
+You are an intelligent query rewriting
+assistant for a conversational
+RAG system.
+
+TASK:
+Rewrite ONLY to improve retrieval.
+
+CORE RULE:
+Preserve user intent EXACTLY.
 
 STRICT RULES:
-- Preserve original meaning exactly
-- Do NOT add new words like
-  "notable", "important",
-  "best", "top"
-- Prefer document language
-- Make query more retrieval-friendly
-- Keep it concise
+- NEVER answer the question
+- NEVER invent information
+- NEVER assume entities
+- NEVER add new conditions
+- NEVER change numbers
+- NEVER change meaning
+- Keep rewriting minimal
+
+Conversation history should ONLY
+be used when the query contains:
+
+- pronouns
+- omitted references
+- follow-up questions
+- missing subjects
 
 Examples:
 
-User Query:
-What projects has she done?
+User:
+Who scored highest runs in IPL?
 
-Rewritten Query:
-List the projects mentioned in the resume
+Rewrite:
+Who scored highest runs in IPL?
 
-User Query:
-Tell me skills
+User:
+Which players scored
+more than 5000 runs?
 
-Rewritten Query:
-List the skills mentioned in the resume
+Rewrite:
+Which IPL players scored
+more than 5000 runs?
 
-User Query:
+User:
+How many centuries
+they have scored?
+
+Rewrite:
+How many centuries have
+the previously discussed
+players scored?
+
+IMPORTANT:
+If query is already clear,
+rewrite minimally.
+
+Conversation History:
+{chat_history if has_history else "None"}
+
+Current Query:
 {query}
 
-Rewritten Query:
+Output:
+Only rewritten query text.
 """
 
         response = (
@@ -60,6 +105,63 @@ Rewritten Query:
         rewritten_query = (
             response.content
             .strip()
+            .split("\n")[0]
         )
 
-        return rewritten_query
+        # -------------------
+        # fallback
+        # -------------------
+
+        if (
+            len(
+                rewritten_query
+            ) == 0
+        ):
+
+            rewritten_query = (
+                query
+            )
+
+        # -------------------
+        # conversational fallback
+        # -------------------
+
+        pronouns = [
+            "he",
+            "she",
+            "they",
+            "them",
+            "his",
+            "her",
+            "it"
+        ]
+
+        query_lower = (
+            query.lower()
+        )
+
+        has_pronoun = any(
+            p in query_lower
+            for p in pronouns
+        )
+
+        if (
+            has_pronoun
+            and has_history
+            and rewritten_query.lower()
+            == query.lower()
+        ):
+
+            rewritten_query = (
+                f"{query} "
+                f"about previously discussed topic"
+            )
+
+        print(
+            "\nRewritten Query:",
+            rewritten_query
+        )
+
+        return (
+            rewritten_query
+        )

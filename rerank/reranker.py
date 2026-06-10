@@ -1,3 +1,4 @@
+
 from sentence_transformers import (
     CrossEncoder
 )
@@ -15,17 +16,67 @@ class Reranker:
         self,
         query,
         retrieved_docs,
-        top_k=3
+        top_k=4
     ):
 
-        pairs = [
-            (
-                query,
-                doc.page_content
-            )
-            for doc
-            in retrieved_docs
-        ]
+        # ------------------------
+        # FILTER VALID DOCS
+        # ------------------------
+
+        pairs = []
+
+        valid_docs = []
+
+        for doc in retrieved_docs:
+
+            if hasattr(
+                doc,
+                "page_content"
+            ):
+
+                pairs.append(
+                    (
+                        query,
+                        doc.page_content
+                    )
+                )
+
+                valid_docs.append(
+                    doc
+                )
+
+            else:
+
+                print(
+                    "\nSkipping invalid doc:",
+                    type(doc)
+                )
+
+        # ------------------------
+        # SAFETY CHECK
+        # ------------------------
+
+        if len(
+            valid_docs
+        ) == 0:
+
+            return {
+
+                "docs": [],
+
+                "best_score":
+                0.0,
+
+                "confidence":
+                0.0,
+
+                "score_gap":
+                0.0
+            }
+
+        # ------------------------
+        # SCORE DOCS
+        # ------------------------
 
         scores = (
             self.model.predict(
@@ -35,7 +86,7 @@ class Reranker:
 
         scored_docs = list(
             zip(
-                retrieved_docs,
+                valid_docs,
                 scores
             )
         )
@@ -50,10 +101,13 @@ class Reranker:
         )
 
         second_score = (
+
             scored_docs[1][1]
+
             if len(
                 scored_docs
             ) > 1
+
             else best_score
         )
 
@@ -81,8 +135,6 @@ class Reranker:
             score_gap
         )
 
-        reranked_docs = []
-
         for doc, score in scored_docs:
 
             print(
@@ -90,28 +142,19 @@ class Reranker:
                 score
             )
 
-            if score >= (
-                best_score - 2.0
-            ):
+        # ------------------------
+        # KEEP TOP K DOCS
+        # ------------------------
 
-                reranked_docs.append(
-                    doc
-                )
+        reranked_docs = [
 
-        if (
-            len(
-                reranked_docs
-            )
-            == 0
-        ):
+            doc
 
-            reranked_docs = [
-                doc
-                for doc, score
-                in scored_docs[
-                    :top_k
-                ]
+            for doc, score
+            in scored_docs[
+                :top_k
             ]
+        ]
 
         return {
 

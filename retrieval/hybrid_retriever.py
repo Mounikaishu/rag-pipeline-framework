@@ -26,7 +26,7 @@ class HybridRetriever:
         self,
         query,
         chunks,
-        k=10
+        k=5
     ):
 
         print(
@@ -41,12 +41,21 @@ class HybridRetriever:
         # VECTOR SEARCH
         # -------------------
 
+        print(
+            "\nRunning Vector Search..."
+        )
+
         vector_docs = (
             self.vector_retriever
             .retrieve(
                 query=query,
                 k=k
             )
+        )
+
+        print(
+            "\nVector Retrieved:",
+            len(vector_docs)
         )
 
         vector_scores = {}
@@ -64,6 +73,10 @@ class HybridRetriever:
         # -------------------
         # BM25 SEARCH
         # -------------------
+
+        print(
+            "\nRunning BM25 Search..."
+        )
 
         tokenized_chunks = [
 
@@ -101,7 +114,7 @@ class HybridRetriever:
             key=lambda i:
             bm25_scores[i],
             reverse=True
-        )[:k]
+        )[:3]
 
         bm25_docs = [
             chunks[i]
@@ -109,37 +122,87 @@ class HybridRetriever:
             in ranked_indices
         ]
 
+        print(
+            "\nBM25 Retrieved:",
+            len(bm25_docs)
+        )
+
         # -------------------
-        # COMBINE SCORES
+        # MERGE RESULTS
         # -------------------
 
-        combined_scores = {}
-
-        all_docs = (
+        combined_docs = (
             vector_docs
             + bm25_docs
         )
 
+        unique_docs = []
+
+        seen = set()
+
+        for doc in combined_docs:
+
+            text = (
+                doc.page_content
+            )
+
+            if (
+                text
+                not in seen
+            ):
+
+                seen.add(
+                    text
+                )
+
+                unique_docs.append(
+                    doc
+                )
+
+        # -------------------
+        # HYBRID SCORE
+        # -------------------
+
+        combined_scores = {}
+
         for rank, doc in enumerate(
-            bm25_docs
+            unique_docs
         ):
 
             text = (
                 doc.page_content
             )
 
-            bm25_score = (
-                1 / (rank + 1)
-            )
-
             vector_score = (
                 vector_scores
-                .get(text, 0)
+                .get(
+                    text,
+                    0
+                )
             )
 
-            combined_scores[
-                text
-            ] = (
+            bm25_score = 0
+
+            if (
+                doc
+                in bm25_docs
+            ):
+
+                bm25_rank = (
+                    bm25_docs.index(
+                        doc
+                    )
+                )
+
+                bm25_score = (
+                    1 /
+                    (
+                        bm25_rank
+                        + 1
+                    )
+                )
+
+            final_score = (
 
                 0.7
                 *
@@ -152,29 +215,61 @@ class HybridRetriever:
                 bm25_score
             )
 
-        # -------------------
-        # DEDUPLICATE
-        # -------------------
+            # -------------------
+            # DOMAIN BOOSTING
+            # -------------------
 
-        unique_docs = {}
-
-        for doc in all_docs:
-
-            text = (
-                doc.page_content
+            text_lower = (
+                text.lower()
             )
 
-            if (
-                text
-                not in unique_docs
+            # batting intent
+            if any(
+                word in query_lower
+                for word in [
+                    "runs",
+                    "scorer",
+                    "batting",
+                    "orange cap",
+                    "highest runs",
+                    "most runs"
+                ]
             ):
 
-                unique_docs[
-                    text
-                ] = doc
+                if (
+                    "batting statistics"
+                    in text_lower
+                ):
+
+                    final_score += 2.5
+
+            # bowling intent
+            elif any(
+                word in query_lower
+                for word in [
+                    "wickets",
+                    "bowling",
+                    "best bowler"
+                ]
+            ):
+
+                if (
+                    "bowling statistics"
+                    in text_lower
+                ):
+
+                    final_score += 2.5
+
+            combined_scores[
+                text
+            ] = final_score
+
+        # -------------------
+        # SORT DOCS
+        # -------------------
 
         final_docs = sorted(
-            unique_docs.values(),
+            unique_docs,
             key=lambda doc:
             combined_scores.get(
                 doc.page_content,
@@ -183,64 +278,13 @@ class HybridRetriever:
             reverse=True
         )
 
-        # -------------------
-        # METADATA BOOSTING
-        # -------------------
-
-        skill_keywords = [
-            "coding",
-            "programming",
-            "language",
-            "skills",
-            "technical"
-        ]
-
-        if any(
-            keyword
-            in query_lower
-            for keyword
-            in skill_keywords
-        ):
-
-            boosted_docs = []
-            other_docs = []
-
-            for doc in final_docs:
-
-                section = str(
-                    doc.metadata.get(
-                        "section",
-                        ""
-                    )
-                ).lower()
-
-                if (
-                    section
-                    == "skills"
-                ):
-
-                    boosted_docs.append(
-                        doc
-                    )
-
-                else:
-
-                    other_docs.append(
-                        doc
-                    )
-
-            final_docs = (
-                boosted_docs
-                + other_docs
-            )
-
-        # -------------------
-        # LIMIT TOP K
-        # -------------------
-
         final_docs = (
             final_docs[:k]
         )
+
+        # -------------------
+        # DEBUG PRINT
+        # -------------------
 
         print(
             "\nHybrid Retrieved:",

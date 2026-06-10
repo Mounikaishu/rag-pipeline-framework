@@ -1,3 +1,4 @@
+
 from sentence_transformers import (
     CrossEncoder
 )
@@ -18,6 +19,19 @@ class Reranker:
         top_k=3
     ):
 
+        # ------------------
+        # EMPTY DOC SAFETY
+        # ------------------
+
+        if len(retrieved_docs) == 0:
+
+            return {
+                "docs": [],
+                "best_score": 0.0,
+                "score_gap": 0.0,
+                "confidence": 0.0
+            }
+
         query_lower = (
             query.lower()
         )
@@ -27,11 +41,14 @@ class Reranker:
                 query,
                 doc.page_content
             )
-            for doc in retrieved_docs
+            for doc
+            in retrieved_docs
         ]
 
-        scores = self.model.predict(
-            pairs
+        scores = (
+            self.model.predict(
+                pairs
+            )
         )
 
         scored_docs = []
@@ -81,14 +98,14 @@ class Reranker:
                 )
             )
 
+        # ------------------
+        # SORT BY SCORE
+        # ------------------
+
         scored_docs.sort(
             key=lambda x: x[1],
             reverse=True
         )
-
-        # ------------------
-        # SCORE GAP
-        # ------------------
 
         best_score = (
             scored_docs[0][1]
@@ -101,8 +118,8 @@ class Reranker:
         )
 
         score_gap = (
-            best_score -
-            second_score
+            best_score
+            - second_score
         )
 
         print(
@@ -127,7 +144,9 @@ class Reranker:
                     doc
                 )
 
-        if len(reranked_docs) == 0:
+        if len(
+            reranked_docs
+        ) == 0:
 
             reranked_docs = [
                 doc
@@ -135,7 +154,29 @@ class Reranker:
                 in scored_docs[:top_k]
             ]
 
+        # ------------------
+        # CONFIDENCE SCORE
+        # ------------------
+
+        confidence = max(
+            0,
+            min(
+                100,
+                (best_score + 15) * 5
+            )
+        )
+
+        print(
+            "Confidence:",
+            confidence
+        )
+
+        # ------------------
+        # RETURN
+        # ------------------
+
         return {
+
             "docs":
             reranked_docs,
 
@@ -143,5 +184,9 @@ class Reranker:
             float(best_score),
 
             "score_gap":
-            float(score_gap)
+            float(score_gap),
+
+            "confidence":
+            float(confidence)
         }
+

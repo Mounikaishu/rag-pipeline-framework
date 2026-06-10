@@ -1,4 +1,3 @@
-
 from sentence_transformers import (
     CrossEncoder
 )
@@ -19,23 +18,6 @@ class Reranker:
         top_k=3
     ):
 
-        # ------------------
-        # EMPTY DOC SAFETY
-        # ------------------
-
-        if len(retrieved_docs) == 0:
-
-            return {
-                "docs": [],
-                "best_score": 0.0,
-                "score_gap": 0.0,
-                "confidence": 0.0
-            }
-
-        query_lower = (
-            query.lower()
-        )
-
         pairs = [
             (
                 query,
@@ -51,56 +33,12 @@ class Reranker:
             )
         )
 
-        scored_docs = []
-
-        for doc, score in zip(
-            retrieved_docs,
-            scores
-        ):
-
-            section = str(
-                doc.metadata.get(
-                    "section",
-                    ""
-                )
-            ).lower()
-
-            # ------------------
-            # SECTION BONUS
-            # ------------------
-
-            skill_keywords = [
-                "coding",
-                "programming",
-                "language",
-                "skills",
-                "technical"
-            ]
-
-            if any(
-                keyword
-                in query_lower
-                for keyword
-                in skill_keywords
-            ):
-
-                if (
-                    section
-                    == "skills"
-                ):
-
-                    score += 2.0
-
-            scored_docs.append(
-                (
-                    doc,
-                    score
-                )
+        scored_docs = list(
+            zip(
+                retrieved_docs,
+                scores
             )
-
-        # ------------------
-        # SORT BY SCORE
-        # ------------------
+        )
 
         scored_docs.sort(
             key=lambda x: x[1],
@@ -113,13 +51,29 @@ class Reranker:
 
         second_score = (
             scored_docs[1][1]
-            if len(scored_docs) > 1
+            if len(
+                scored_docs
+            ) > 1
             else best_score
         )
 
         score_gap = (
             best_score
             - second_score
+        )
+
+        confidence = max(
+            0,
+            min(
+                100,
+                (
+                    (
+                        best_score
+                        + 10
+                    )
+                    / 20
+                ) * 100
+            )
         )
 
         print(
@@ -144,36 +98,20 @@ class Reranker:
                     doc
                 )
 
-        if len(
-            reranked_docs
-        ) == 0:
+        if (
+            len(
+                reranked_docs
+            )
+            == 0
+        ):
 
             reranked_docs = [
                 doc
                 for doc, score
-                in scored_docs[:top_k]
+                in scored_docs[
+                    :top_k
+                ]
             ]
-
-        # ------------------
-        # CONFIDENCE SCORE
-        # ------------------
-
-        confidence = max(
-            0,
-            min(
-                100,
-                (best_score + 15) * 5
-            )
-        )
-
-        print(
-            "Confidence:",
-            confidence
-        )
-
-        # ------------------
-        # RETURN
-        # ------------------
 
         return {
 
@@ -181,12 +119,17 @@ class Reranker:
             reranked_docs,
 
             "best_score":
-            float(best_score),
-
-            "score_gap":
-            float(score_gap),
+            float(
+                best_score
+            ),
 
             "confidence":
-            float(confidence)
-        }
+            float(
+                confidence
+            ),
 
+            "score_gap":
+            float(
+                score_gap
+            )
+        }

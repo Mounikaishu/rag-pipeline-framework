@@ -1,3 +1,4 @@
+
 from langchain_community.vectorstores import (
     Chroma
 )
@@ -25,27 +26,38 @@ class Retriever:
             )
         )
 
-        self.vector_store = Chroma(
-            persist_directory=
-            persist_directory,
+        self.vector_store = (
+            Chroma(
+                persist_directory=
+                persist_directory,
 
-            embedding_function=
-            self.embedding_model
+                embedding_function=
+                self.embedding_model
+            )
         )
 
     def retrieve(
         self,
         query,
-        k=3
+        k=5
     ):
 
+        print(
+            "\nRunning Vector Search..."
+        )
+
         results = (
-    self.vector_store
-    .max_marginal_relevance_search(
-        query,
-        k=k,
-        fetch_k=10
-    )
-)
+            self.vector_store
+            .max_marginal_relevance_search(
+                query=query,
+                k=k,
+                fetch_k=20
+            )
+        )
+
+        print(
+            "\nVector Retrieved:",
+            len(results)
+        )
 
         return results

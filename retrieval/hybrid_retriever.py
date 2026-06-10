@@ -1,3 +1,4 @@
+
 from rank_bm25 import (
     BM25Okapi
 )
@@ -29,7 +30,7 @@ class HybridRetriever:
     ):
 
         print(
-            "\nNEW HYBRID RETRIEVER RUNNING"
+            "\nHYBRID RETRIEVER RUNNING"
         )
 
         query_lower = (
@@ -48,13 +49,30 @@ class HybridRetriever:
             )
         )
 
+        vector_scores = {}
+
+        for rank, doc in enumerate(
+            vector_docs
+        ):
+
+            vector_scores[
+                doc.page_content
+            ] = (
+                1 / (rank + 1)
+            )
+
         # -------------------
         # BM25 SEARCH
         # -------------------
 
         tokenized_chunks = [
-            doc.page_content.split()
-            for doc in chunks
+
+            doc.page_content
+            .lower()
+            .split()
+
+            for doc
+            in chunks
         ]
 
         bm25 = (
@@ -64,7 +82,8 @@ class HybridRetriever:
         )
 
         tokenized_query = (
-            query.split()
+            query.lower()
+            .split()
         )
 
         bm25_scores = (
@@ -86,37 +105,83 @@ class HybridRetriever:
 
         bm25_docs = [
             chunks[i]
-            for i in ranked_indices
+            for i
+            in ranked_indices
         ]
 
         # -------------------
-        # MERGE RESULTS
+        # COMBINE SCORES
         # -------------------
 
-        combined_docs = (
+        combined_scores = {}
+
+        all_docs = (
             vector_docs
             + bm25_docs
         )
 
-        unique_docs = []
-
-        seen = set()
-
-        for doc in combined_docs:
+        for rank, doc in enumerate(
+            bm25_docs
+        ):
 
             text = (
                 doc.page_content
             )
 
-            if text not in seen:
+            bm25_score = (
+                1 / (rank + 1)
+            )
 
-                seen.add(
+            vector_score = (
+                vector_scores
+                .get(text, 0)
+            )
+
+            combined_scores[
+                text
+            ] = (
+
+                0.7
+                *
+                vector_score
+
+                +
+
+                0.3
+                *
+                bm25_score
+            )
+
+        # -------------------
+        # DEDUPLICATE
+        # -------------------
+
+        unique_docs = {}
+
+        for doc in all_docs:
+
+            text = (
+                doc.page_content
+            )
+
+            if (
+                text
+                not in unique_docs
+            ):
+
+                unique_docs[
                     text
-                )
+                ] = doc
 
-                unique_docs.append(
-                    doc
-                )
+        final_docs = sorted(
+            unique_docs.values(),
+            key=lambda doc:
+            combined_scores.get(
+                doc.page_content,
+                0
+            ),
+            reverse=True
+        )
 
         # -------------------
         # METADATA BOOSTING
@@ -138,10 +203,9 @@ class HybridRetriever:
         ):
 
             boosted_docs = []
-
             other_docs = []
 
-            for doc in unique_docs:
+            for doc in final_docs:
 
                 section = str(
                     doc.metadata.get(
@@ -165,33 +229,44 @@ class HybridRetriever:
                         doc
                     )
 
-            unique_docs = (
+            final_docs = (
                 boosted_docs
                 + other_docs
             )
 
         # -------------------
-        # DEBUG PRINT
+        # LIMIT TOP K
         # -------------------
 
-        print(
-            "\nHybrid Retrieved docs:",
-            len(unique_docs)
+        final_docs = (
+            final_docs[:k]
         )
 
-        for doc in unique_docs:
+        print(
+            "\nHybrid Retrieved:",
+            len(final_docs)
+        )
+
+        for i, doc in enumerate(
+            final_docs
+        ):
 
             print(
-                "\nSECTION:",
+                f"\nDoc {i+1}"
+            )
+
+            print(
+                "Section:",
                 doc.metadata.get(
-                    "section"
+                    "section",
+                    "N/A"
                 )
             )
 
             print(
                 doc.page_content[
-                    :200
+                    :150
                 ]
             )
 
-        return unique_docs
+        return final_docs
